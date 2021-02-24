@@ -21,7 +21,7 @@ object SudokuGraph extends Graph[Partial]{
   * 
   * This expects to find the filename for the starting position as the first
   * argument on the command line.  */
-object Sudoku{
+object Sudoku {
   def main(args: Array[String]) = {
     val fname = args(0)
     val useConc = args.length > 1 && args(1) == "--conc"

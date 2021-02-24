@@ -6,22 +6,22 @@ import scala.collection.mutable.Queue
 // and the stack is empty
 class TerminatingConcStack[T](numWorkers: p) {
 
-    // channels for enqueueing and dequeueing - when dequeue send a reply chan for a reply
-    private val enqueueChan = ManyOne[T]
+    // channels for pushing and popping - when popping send a reply chan for a reply
+    private val pushChan = ManyOne[T]
 
     private type ReplyChan = Chan[T]
-    private val dequeueChan = ManyOne[ReplyChan]
+    private val popChan = ManyOne[ReplyChan]
 
     // channel to shutdown the stack
     private val shutdownChan = ManyOne[Unit]
 
     // send the value to be enqueued
-    def enqueue(x: T): Unit = enqueueChan!x
+    def push(x: T): Unit = pushChan!x
 
     // send the request to dequeue and the reply channel, receive the reply
-    def dequeue: T = {
-        val reply = OneOne[A]
-        dequeueChan!reply
+    def pop: T = {
+        val reply = OneOne[T]
+        popChan!reply
         reply?()
     }
 
@@ -31,25 +31,25 @@ class TerminatingConcStack[T](numWorkers: p) {
     private def server = proc {
         // held values
         var stack = new List[T]()
-        // queue of channels waiting to dequeue
+        // queue of channels waiting to pop
         val waiters = new Queue[ReplyChan]()
 
         // function to close all the channels in the server
         def close = {
             for (w <- waiters) w.close
-            enqueueChan.close; dequeueChan.close; shutdownChan.close
+            pushChan.close; popChan.close; shutdownChan.close
         }
 
         serve (
-            // if enqueueing, either send directly to a waiting process or push to the stack if no waiters
-            enqueueChan =?=> { x =>
+            // if pushing, either send directly to a waiting process or push to the stack if no waiters
+            pushChan =?=> { x =>
                 if (waiters.nonEmpty) {
                     assert(stack.isEmpty); waiters.dequeue!x
                 }
                 else stack = x::stack
             }
-            // if dequeueing, either pop item from the stack if stack has items or add to list of waiting processes
-            | dequeueChan =?=> { reply =>
+            // if popping, either pop item from the stack if stack has items or add to list of waiting processes
+            | popChan =?=> { reply =>
                 if (stack.nonEmpty) {
                     (head::stack) = stack
                     reply!head
