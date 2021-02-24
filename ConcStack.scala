@@ -1,10 +1,10 @@
 import io.threadcso._
-import scala.collection.immutable.List
+import scala.collection.mutable.Stack
 import scala.collection.mutable.Queue
 
 // a concurrent stack which terminates if all  the worker threads are attempting to pop off the stack
 // and the stack is empty
-class TerminatingConcStack[T](numWorkers: p) {
+class TerminatingConcStack[T](numWorkers: Int) {
 
     // channels for pushing and popping - when popping send a reply chan for a reply
     private val pushChan = ManyOne[T]
@@ -30,7 +30,7 @@ class TerminatingConcStack[T](numWorkers: p) {
 
     private def server = proc {
         // held values
-        var stack = new List[T]()
+        var stack = new Stack[T]()
         // queue of channels waiting to pop
         val waiters = new Queue[ReplyChan]()
 
@@ -46,13 +46,12 @@ class TerminatingConcStack[T](numWorkers: p) {
                 if (waiters.nonEmpty) {
                     assert(stack.isEmpty); waiters.dequeue!x
                 }
-                else stack = x::stack
+                else stack.push(x)
             }
             // if popping, either pop item from the stack if stack has items or add to list of waiting processes
             | popChan =?=> { reply =>
                 if (stack.nonEmpty) {
-                    (head::stack) = stack
-                    reply!head
+                    reply!(stack.pop)
                 }
                 else {
                     waiters.enqueue(reply)
